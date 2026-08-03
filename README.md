@@ -14,10 +14,10 @@ Written for a Java developer with zero .NET experience. Keep this file in your r
 
 _(no commits yet — this is local machine setup)_
 
-- [ ] Install the **.NET 10 SDK**, verify with `dotnet --version`
-- [ ] Install **Docker Desktop** (Aspire uses it to spin up Postgres)
-- [ ] Install an IDE: **VS Code + "C# Dev Kit" extension** (cross-platform, closest to a lightweight IntelliJ setup), or **Rider** if you have a JetBrains license (very natural coming from IntelliJ), or **Visual Studio** on Windows
-- [ ] Create the GitHub repo, clone it locally, add a `.gitignore` (use the "VisualStudio" GitHub template) and a license
+- [x] Install the **.NET 10 SDK**, verify with `dotnet --version`
+- [x] Install **Docker Desktop** (Aspire uses it to spin up Postgres)
+- [x] Install an IDE: **VS Code + "C# Dev Kit" extension** (cross-platform, closest to a lightweight IntelliJ setup), or **Rider** if you have a JetBrains license (very natural coming from IntelliJ), or **Visual Studio** on Windows
+- [x] Create the GitHub repo, clone it locally, add a `.gitignore` (use the "VisualStudio" GitHub template) and a license
 
 **Commit:** `chore: initialize repository with .gitignore and license`
 
@@ -25,19 +25,19 @@ _(no commits yet — this is local machine setup)_
 
 ## Phase 1 — Solution Scaffolding
 
-- [ ] Scaffold the **.NET Aspire** solution: an **AppHost** project (the orchestrator — think a docker-compose file with a supervisor attached), a **ServiceDefaults** project (shared cross-cutting config: telemetry, health checks, resilience — like a shared internal Spring Boot starter), and an empty **API** project.
+- [x] Scaffold the **.NET Aspire** solution: an **AppHost** project (the orchestrator — think a docker-compose file with a supervisor attached), a **ServiceDefaults** project (shared cross-cutting config: telemetry, health checks, resilience — like a shared internal Spring Boot starter), and an empty **API** project.
 
   > ⚠️ Aspire's exact `dotnet new` template names shift between versions — check the [current install steps](https://learn.microsoft.com/dotnet/aspire/get-started/aspire-overview) before running this rather than trusting a remembered command.
 
   **Commit:** `feat: scaffold .NET Aspire solution with AppHost and API project`
 
-- [ ] Add the **Blazor Web App** project, reference it from AppHost.
+- [x] Add the **Blazor Web App** project, reference it from AppHost.
 
   **Commit:** `feat: add Blazor frontend project`
 
-- [ ] Run it (`dotnet run` from AppHost) and confirm the **Aspire dashboard** loads — this is your local control tower: traces, logs, and env vars for every service in one place. Nothing to commit here, just a checkpoint.
+- [x] Run it (`dotnet run` from AppHost) and confirm the **Aspire dashboard** loads — this is your local control tower: traces, logs, and env vars for every service in one place. Nothing to commit here, just a checkpoint.
 
-- [ ] Write a first-pass project README describing the goal and linking back to your portfolio README.
+- [x] Write a first-pass project README describing the goal and linking back to your portfolio README.
 
   **Commit:** `docs: add initial project README`
 
