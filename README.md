@@ -62,23 +62,6 @@ _(no commits yet — this is local machine setup)_
   **Commit:** `feat: add ApplicationDbContext`
 
 - [x] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
-- [ ] Add NuGet packages: `Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`
-
-  **Commit:** `chore: add EF Core and pgvector NuGet packages`
-
-- [ ] In AppHost, add a Postgres container resource (pgvector-enabled image) and wire it to the API project — Aspire injects the connection string automatically, no manual "wait for DB" scripts needed.
-
-  **Commit:** `feat: add Postgres with pgvector via Aspire hosting`
-
-- [ ] Define entity models: `Document`, `DocumentChunk` (with a vector column for the embedding) — your `@Entity` equivalent, just plain C# classes.
-
-  **Commit:** `feat: define Document and DocumentChunk entity models`
-
-- [ ] Create the `DbContext` (your `EntityManager`/DAO equivalent) and register it in DI.
-
-  **Commit:** `feat: add ApplicationDbContext`
-
-- [ ] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
 
   **Commit:** `feat: add initial database migration`
 
@@ -550,3 +533,5 @@ Confirm the `Embedding` column shows type `vector(768)`. If you added `WithPgAdm
 **Checkpoint before moving to Phase 3:** you should be able to run the AppHost, see all resources green in the dashboard, and see two empty but correctly-shaped tables in the database. That's the whole of Phase 2 — nothing here writes or reads real data yet; that starts in Phase 3 (ingestion).
 
 Run through this and let me know where it breaks — that's normal, and debugging the first real error is usually where the actual learning happens.
+------
+ctrl + c stuck -> killall dotnet
