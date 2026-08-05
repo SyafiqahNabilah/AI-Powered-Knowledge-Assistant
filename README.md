@@ -53,15 +53,15 @@ _(no commits yet — this is local machine setup)_
 
   **Commit:** `feat: add Postgres with pgvector via Aspire hosting`
 
-- [ ] Define entity models: `Document`, `DocumentChunk` (with a vector column for the embedding) — your `@Entity` equivalent, just plain C# classes.
+- [x] Define entity models: `Document`, `DocumentChunk` (with a vector column for the embedding) — your `@Entity` equivalent, just plain C# classes.
 
   **Commit:** `feat: define Document and DocumentChunk entity models`
 
-- [ ] Create the `DbContext` (your `EntityManager`/DAO equivalent) and register it in DI.
+- [x] Create the `DbContext` (your `EntityManager`/DAO equivalent) and register it in DI.
 
   **Commit:** `feat: add ApplicationDbContext`
 
-- [ ] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
+- [x] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
 
   **Commit:** `feat: add initial database migration`
 

@@ -1,21 +1,25 @@
 using AspireApp.ApiService.Data;
 using Microsoft.EntityFrameworkCore;
 
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
-builder.AddServiceDefaults();
+// builder.Services.AddAspireServiceDefaults();
+
+// Add services to the container.
+builder.Services.AddProblemDetails();
+
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
 
 //Add database context for PostgreSQL
 builder.AddNpgsqlDbContext<ApplicationDbContext>("cortexdb", configureDbContextOptions: options =>
 {
     options.UseNpgsql(o => o.UseVector()); // teaches Npgsql about pgvector's wire format
 });
-// Add services to the container.
-builder.Services.AddProblemDetails();
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -45,7 +49,7 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast");
 
-app.MapDefaultEndpoints();
+// app.MapDefaultEndpoints();
 
 app.Run();
 
