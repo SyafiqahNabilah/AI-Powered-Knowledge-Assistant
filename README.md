@@ -45,6 +45,23 @@ _(no commits yet — this is local machine setup)_
 
 ## Phase 2 — Data Layer
 
+- [x] Add NuGet packages: `Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`
+
+  **Commit:** `chore: add EF Core and pgvector NuGet packages`
+
+- [x] In AppHost, add a Postgres container resource (pgvector-enabled image) and wire it to the API project — Aspire injects the connection string automatically, no manual "wait for DB" scripts needed.
+
+  **Commit:** `feat: add Postgres with pgvector via Aspire hosting`
+
+- [x] Define entity models: `Document`, `DocumentChunk` (with a vector column for the embedding) — your `@Entity` equivalent, just plain C# classes.
+
+  **Commit:** `feat: define Document and DocumentChunk entity models`
+
+- [x] Create the `DbContext` (your `EntityManager`/DAO equivalent) and register it in DI.
+
+  **Commit:** `feat: add ApplicationDbContext`
+
+- [x] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
 - [ ] Add NuGet packages: `Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`
 
   **Commit:** `chore: add EF Core and pgvector NuGet packages`
@@ -245,3 +262,291 @@ These aren't tasks — they're judgment calls that separate "it works" from "I'd
 - Open a PR into `main` even solo — self-review it, then merge. Gives you a clean, explainable history.
 - Squash-merge so `main`'s history reads as one commit per feature.
 - Tag `v1.0.0` once Phase 10 is done. Tag further versions as you extend the project post-launch.
+
+Good — let's build the data layer step by step. I'll assume you've got the Aspire solution scaffolded from Phase 1 (AppHost, ServiceDefaults, an API project, and a Blazor project). I'll use **Cortex** as the example project name throughout — swap in whatever you actually named it.
+
+One honest flag before we start: Aspire's exact API surface moves fast between versions, and the skill list you saw referenced Aspire 13.4, which is newer than what I can verify in detail. The _concepts_ below are stable; if a method name doesn't match what your IDE's autocomplete shows, trust your IDE over my memory and we'll adjust together.
+
+---
+
+## 2.1 — Add the NuGet Packages
+
+**Concept first.** In Java, you'd add a dependency to `pom.xml` and Maven resolves it. In .NET, `dotnet add package` does the same thing to your `.csproj` — it writes a `<PackageReference>` element and NuGet resolves/downloads it into a local cache (`~/.nuget/packages`, analogous to `~/.m2/repository`).
+
+You need two different _kinds_ of packages here, and the distinction matters:
+
+| Package                                        | What it is                                                                                                                                   |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Npgsql.EntityFrameworkCore.PostgreSQL`        | The actual EF Core database provider for Postgres — talks SQL over the wire                                                                  |
+| `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` | Aspire's _client integration_ wrapper — auto-wires the connection string from service discovery, plus health checks/telemetry/retry for free |
+| `Pgvector.EntityFrameworkCore`                 | Community package (pgvector-dotnet) that teaches EF Core about the `vector` column type                                                      |
+
+In a non-Aspire tutorial you'd only ever see the first row. In an Aspire project, you mostly interact with the second — it depends on the first internally.
+
+**Run this** from your API project's folder (or pass `--project`):
+
+```bash
+cd src/Cortex.Api
+dotnet add package Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
+dotnet add package Pgvector.EntityFrameworkCore
+```
+
+**Checkpoint:** open `Cortex.Api.csproj` and confirm you see new `<PackageReference Include="..." Version="..." />` lines. That's the whole effect — no magic, just a manifest entry, same mental model as `pom.xml`.
+
+---
+
+## 2.2 — Add Postgres (with pgvector) via the AppHost
+
+**Concept first.** The AppHost project is Aspire's orchestrator — it's C# code that _describes_ your distributed app's topology (what runs, what depends on what) instead of a YAML file like `docker-compose.yml`. When you `dotnet run` the AppHost, it stands up every resource you declared and wires connection strings between them automatically. Nothing is hardcoded — no "the DB is on port 5433," no `.env` file with a copy-pasted connection string.
+
+Add the Postgres hosting package to the **AppHost** project specifically (not the API):
+
+```bash
+cd src/Cortex.AppHost
+dotnet add package Aspire.Hosting.PostgreSQL
+```
+
+Now edit `AppHost/Program.cs`. Plain Postgres doesn't ship with the `vector` extension compiled in, so we use the community `pgvector/pgvector` image, which is Postgres + the extension pre-installed:
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(args);
+
+var postgres = builder.AddPostgres("postgres")
+    .WithImage("pgvector/pgvector", "pg16")   // postgres 16 + pgvector extension baked in
+    .WithDataVolume()                          // persist data across `dotnet run` restarts
+    .WithHostPort(5432)                        // pin the port so you can psql/pgAdmin in manually
+    .WithPgAdmin();                             // optional: web UI to poke at the DB
+
+var cortexDb = postgres.AddDatabase("cortexdb");
+
+var api = builder.AddProject<Projects.Cortex_Api>("api")
+    .WithReference(cortexDb)
+    .WaitFor(cortexDb);   // don't start the API until Postgres is actually ready
+
+builder.AddProject<Projects.Cortex_Web>("web")
+    .WithReference(api)
+    .WaitFor(api);
+
+builder.Build().Run();
+```
+
+**Java parallel:** think of this file as a hybrid of a `docker-compose.yml` and a Spring `@Configuration` class — it's declaring infrastructure _and_ wiring dependency graph in one place.
+
+`WithDataVolume()` is worth pausing on: without it, your Postgres container is stateless — every `dotnet run` gives you a fresh empty database, which is annoying once you have real test data. With it, data survives restarts (backed by a Docker volume).
+
+Now wire the API project to actually _use_ the connection. In `Cortex.Api/Program.cs`:
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults(); // from Aspire's ServiceDefaults project: telemetry, health checks, resilience
+
+builder.AddNpgsqlDbContext<ApplicationDbContext>("cortexdb", configureDbContextOptions: options =>
+{
+    options.UseNpgsql(o => o.UseVector()); // teaches Npgsql about pgvector's wire format
+});
+```
+
+⚠️ That `configureDbContextOptions` overload combining Aspire + pgvector-dotnet is the trickiest integration point in this whole phase — I'm reasonably but not fully confident in that exact signature for your Aspire version. If it doesn't compile, fall back to this (functionally equivalent, more verbose) pattern instead:
+
+```csharp
+builder.Services.AddNpgsqlDataSource(
+    builder.Configuration.GetConnectionString("cortexdb")!,
+    dataSourceBuilder => dataSourceBuilder.UseVector());
+
+builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>()));
+```
+
+Note what you notably _don't_ have anywhere: a connection string in `appsettings.json`. The string `"cortexdb"` above is just a _name_ — Aspire resolves the real host/port/credentials at runtime and injects them as an environment variable into the API process. This is the single biggest mental shift from a typical Spring Boot `application.yml` workflow.
+
+**Checkpoint — run it:**
+
+```bash
+cd src/Cortex.AppHost
+dotnet run
+```
+
+Open the Aspire dashboard link printed in the console. You should see three resources: `postgres`, `api`, `web`. Click on `postgres` — its state should go from "Starting" to a green "Running." Click on `api` and check its environment variables tab; you should see a `ConnectionStrings__cortexdb` entry Aspire injected for you. If `postgres` sits red/unhealthy, check Docker Desktop is actually running — that's the #1 cause.
+
+**Commit:** `feat: add Postgres with pgvector via Aspire hosting`
+
+---
+
+## 2.3 — Define the Entity Models
+
+**Concept first.** In JPA/Hibernate you'd annotate a class with `@Entity`, `@Id`, `@Column`. EF Core defaults to _convention over configuration_ instead — a plain C# class with a property named `Id` is automatically treated as the primary key, no annotations required. You only reach for annotations or fluent config (which we'll do in 2.4) when you need to override the convention.
+
+Create a `Data` folder in the API project, then `Document.cs`:
+
+```csharp
+namespace Cortex.Api.Data;
+
+public class Document
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public required string FileName { get; set; }
+    public required string ContentHash { get; set; }   // SHA-256 of file bytes — enables idempotent re-upload checks in Phase 3
+    public DateTimeOffset UploadedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public List<DocumentChunk> Chunks { get; set; } = [];
+}
+```
+
+And `DocumentChunk.cs`:
+
+```csharp
+using Pgvector;
+
+namespace Cortex.Api.Data;
+
+public class DocumentChunk
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public required Guid DocumentId { get; set; }
+    public Document? Document { get; set; }
+
+    public required string Content { get; set; }
+    public required int ChunkIndex { get; set; }   // preserves original order within the source document
+
+    public required Vector Embedding { get; set; }   // from Pgvector.EntityFrameworkCore
+}
+```
+
+Two C# things worth calling out since they don't exist in Java:
+
+- `required` (on a property) — the compiler forces every caller to set that property when constructing the object. It's a stricter, compile-time version of what you'd enforce with a constructor + validation in Java.
+- `= []` — target-typed collection literal (C# 12), shorthand for `= new List<DocumentChunk>()`.
+
+**Decision point you need to make now, not later:** the `Embedding` column's dimensionality depends entirely on which embedding model you pick in Phase 3. `nomic-embed-text` via Ollama produces 768-dimensional vectors; OpenAI's `text-embedding-3-small` produces 1536. This number gets hardcoded into the database schema in the next step, so decide now — I'd suggest starting with Ollama + `nomic-embed-text` (free, offline, 768 dims) since it removes API key friction from your dev loop entirely.
+
+**Commit:** `feat: define Document and DocumentChunk entity models`
+
+---
+
+## 2.4 — Create the DbContext
+
+**Concept first.** `DbContext` is roughly your JPA `EntityManager` and Hibernate `Session` combined — it tracks entity state, translates LINQ queries to SQL, and manages the unit-of-work/change-tracking that eventually becomes an `UPDATE`/`INSERT` on `SaveChanges()`.
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+
+namespace Cortex.Api.Data;
+
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    : DbContext(options)
+{
+    public DbSet<Document> Documents => Set<Document>();
+    public DbSet<DocumentChunk> Chunks => Set<DocumentChunk>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasPostgresExtension("vector"); // generates `CREATE EXTENSION IF NOT EXISTS vector` in the migration
+
+        modelBuilder.Entity<DocumentChunk>()
+            .Property(c => c.Embedding)
+            .HasColumnType("vector(768)"); // matches nomic-embed-text's output dimension — change if you picked a different model
+
+        modelBuilder.Entity<DocumentChunk>()
+            .HasOne(c => c.Document)
+            .WithMany(d => d.Chunks)
+            .HasForeignKey(c => c.DocumentId)
+            .OnDelete(DeleteBehavior.Cascade); // deleting a Document deletes its Chunks — no orphaned rows
+
+        base.OnModelCreating(modelBuilder);
+    }
+}
+```
+
+Notice the class declaration: `ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)` — that's a **primary constructor** (C# 12), a compact way of writing what used to require an explicit constructor body just to call `base(options)`. Purely modern-C# syntax sugar; functionally identical to the old verbose form.
+
+You do **not** register this with `builder.Services.AddDbContext<>()` yourself — that already happened via `AddNpgsqlDbContext<ApplicationDbContext>(...)` in step 2.2. That's an Aspire-specific shortcut that most generic EF Core tutorials online won't show you, because they're not written with Aspire's service-discovery model in mind.
+
+**Commit:** `feat: add ApplicationDbContext`
+
+---
+
+## 2.5 — Create and Apply the First Migration
+
+**Concept first.** EF Core Migrations are the code-first equivalent of Flyway/Liquibase: you change your C# model, run a tool, and it diffs your model against its last known snapshot to generate a versioned SQL script (`Up()`/`Down()` methods in a generated C# file, not raw `.sql`, though raw SQL is under the hood).
+
+**Install the EF Core CLI tool** (this is a `dotnet` global tool, separate from the NuGet packages you added earlier — think of it like installing a Maven plugin globally versus per-project):
+
+```bash
+dotnet tool install --global dotnet-ef
+dotnet ef --version   # confirm it's on your PATH
+```
+
+**Here's the wrinkle specific to Aspire projects.** `dotnet ef migrations add` needs to _construct_ your `DbContext` at design time to inspect its model — but your real connection string only exists once the AppHost is running and injecting it via environment variables. EF's tooling doesn't know anything about Aspire's runtime service discovery. The clean fix is a small factory that gives the tooling a throwaway, hardcoded connection string used _only_ for generating migrations — never for running the actual app:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+
+namespace Cortex.Api.Data;
+
+public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
+{
+    public ApplicationDbContext CreateDbContext(string[] args)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        optionsBuilder.UseNpgsql(
+            "Host=localhost;Port=5432;Database=cortexdb;Username=postgres;Password=postgres",
+            o => o.UseVector());
+        return new ApplicationDbContext(optionsBuilder.Options);
+    }
+}
+```
+
+(The port/credentials here should match whatever Aspire's Postgres resource actually uses locally — with `WithHostPort(5432)` from step 2.2, port 5432 is predictable. Default Aspire Postgres credentials are typically `postgres`/a generated password unless you pinned one — check the dashboard's env vars for the real password if this doesn't connect.)
+
+**Generate the migration:**
+
+```bash
+cd src/Cortex.Api
+dotnet ef migrations add InitialCreate
+```
+
+This creates a `Migrations/` folder with a timestamped file containing `Up()` (create tables, add the vector column, create the extension) and `Down()` (undo it). Open it and skim it — you should recognize your two entities as `CreateTable` calls, and see the `vector(768)` column type you configured.
+
+**Apply it.** For Aspire projects, the cleanest approach is applying migrations _programmatically at startup_ rather than via CLI — it sidesteps the design-time connection-string mismatch entirely, since at runtime the real Aspire-injected connection string is already available. In `Cortex.Api/Program.cs`, after `var app = builder.Build();`:
+
+```csharp
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
+```
+
+**Checkpoint — verify the schema landed:**
+
+```bash
+docker exec -it <postgres-container-name> psql -U postgres -d cortexdb -c "\dt"
+```
+
+(Find the container name via `docker ps` or the Aspire dashboard's resource details.) You should see `Documents` and `Chunks` tables. Then:
+
+```bash
+docker exec -it <postgres-container-name> psql -U postgres -d cortexdb -c "\d \"Chunks\""
+```
+
+Confirm the `Embedding` column shows type `vector(768)`. If you added `WithPgAdmin()` in 2.2, you can do this same inspection visually in the browser instead of the CLI.
+
+**Commit:** `feat: add initial database migration`
+
+---
+
+## Common Errors You'll Likely Hit
+
+- **`relation "vector" does not exist` / extension errors** — the `pgvector/pgvector` image wasn't actually used (double-check `.WithImage(...)` in AppHost), or `HasPostgresExtension("vector")` is missing from `OnModelCreating`.
+- **`dotnet ef` can't find the DbContext** — usually means the design-time factory isn't being discovered; confirm it implements `IDesignTimeDbContextFactory<ApplicationDbContext>` exactly and lives in the same project you're running the command from.
+- **Migration applies but connecting manually with `psql` fails** — password mismatch between what you hardcoded in the design-time factory and what Aspire actually generated. Check the real value in the dashboard's env vars for the `postgres` resource.
+- **Port conflict on 5432** — if you already have a local Postgres running outside Docker, either stop it or change `WithHostPort` to something else (e.g. `5433`) and update the design-time factory to match.
+
+---
+
+**Checkpoint before moving to Phase 3:** you should be able to run the AppHost, see all resources green in the dashboard, and see two empty but correctly-shaped tables in the database. That's the whole of Phase 2 — nothing here writes or reads real data yet; that starts in Phase 3 (ingestion).
+
+Run through this and let me know where it breaks — that's normal, and debugging the first real error is usually where the actual learning happens.

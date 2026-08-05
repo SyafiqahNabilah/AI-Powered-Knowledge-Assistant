@@ -1,3 +1,12 @@
+using AspireApp.ApiService.Data;
+using Microsoft.EntityFrameworkCore;
+
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add service defaults & Aspire client integrations.
+// builder.Services.AddAspireServiceDefaults();
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
@@ -8,6 +17,13 @@ builder.Services.AddProblemDetails();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+//Add database context for PostgreSQL
+builder.AddNpgsqlDbContext<ApplicationDbContext>("cortexdb", configureDbContextOptions: options =>
+{
+    options.UseNpgsql(o => o.UseVector()); // teaches Npgsql about pgvector's wire format
+});
+
 
 var app = builder.Build();
 
