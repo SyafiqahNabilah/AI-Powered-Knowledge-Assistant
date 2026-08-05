@@ -14,8 +14,7 @@ var apiService = builder.AddProject<Projects.AspireApp_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithReference(cortexDb)
     .WaitFor(cortexDb); //wait for the database to be ready before starting the API service
-var apiService = builder.AddProject<Projects.AspireApp_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health");
+
 
 var gateway = builder.AddBlazorGateway("gateway")
     .WithExternalHttpEndpoints();
