@@ -62,6 +62,23 @@ _(no commits yet — this is local machine setup)_
   **Commit:** `feat: add ApplicationDbContext`
 
 - [x] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
+- [ ] Add NuGet packages: `Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`
+
+  **Commit:** `chore: add EF Core and pgvector NuGet packages`
+
+- [ ] In AppHost, add a Postgres container resource (pgvector-enabled image) and wire it to the API project — Aspire injects the connection string automatically, no manual "wait for DB" scripts needed.
+
+  **Commit:** `feat: add Postgres with pgvector via Aspire hosting`
+
+- [ ] Define entity models: `Document`, `DocumentChunk` (with a vector column for the embedding) — your `@Entity` equivalent, just plain C# classes.
+
+  **Commit:** `feat: define Document and DocumentChunk entity models`
+
+- [ ] Create the `DbContext` (your `EntityManager`/DAO equivalent) and register it in DI.
+
+  **Commit:** `feat: add ApplicationDbContext`
+
+- [ ] Create and apply the first migration (`dotnet ef migrations add InitialCreate`, `dotnet ef database update`).
 
   **Commit:** `feat: add initial database migration`
 
@@ -246,7 +263,6 @@ These aren't tasks — they're judgment calls that separate "it works" from "I'd
 - Squash-merge so `main`'s history reads as one commit per feature.
 - Tag `v1.0.0` once Phase 10 is done. Tag further versions as you extend the project post-launch.
 
-======================
 Good — let's build the data layer step by step. I'll assume you've got the Aspire solution scaffolded from Phase 1 (AppHost, ServiceDefaults, an API project, and a Blazor project). I'll use **Cortex** as the example project name throughout — swap in whatever you actually named it.
 
 One honest flag before we start: Aspire's exact API surface moves fast between versions, and the skill list you saw referenced Aspire 13.4, which is newer than what I can verify in detail. The _concepts_ below are stable; if a method name doesn't match what your IDE's autocomplete shows, trust your IDE over my memory and we'll adjust together.
