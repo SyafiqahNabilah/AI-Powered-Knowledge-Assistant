@@ -1,5 +1,6 @@
 using AspireApp.ApiService.Data;
 using Microsoft.EntityFrameworkCore;
+using AspireApp.ApiService.Documents;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +37,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapGet("/", () => "API service is running. Navigate to /documents to see sample data.");
+app.MapDocumentsEndpoints(); // wire up the /documents endpoints defined in DocumentsEndpoints.cs
 app.MapDefaultEndpoints();
 
 app.Run();
