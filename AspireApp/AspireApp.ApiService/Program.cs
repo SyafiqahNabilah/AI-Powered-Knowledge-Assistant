@@ -26,7 +26,7 @@ builder.AddNpgsqlDbContext<ApplicationDbContext>("cortexdb", configureDbContextO
 builder.Services.AddSingleton<ITextExtractor, PdfTextExtractor>();
 builder.Services.AddSingleton<ITextExtractor, PlainTextExtractor>();
 builder.Services.AddSingleton<TextExtractorFactory>();
-
+builder.Services.AddSingleton<ITextChunker, SlidingWindowChunker>();
 var app = builder.Build();
 //migration execution
 using (var scope = app.Services.CreateScope())
