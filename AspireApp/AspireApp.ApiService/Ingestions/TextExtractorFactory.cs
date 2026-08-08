@@ -1,4 +1,4 @@
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 // Picks the right ITextExtractor for a given file at runtime.
 public class TextExtractorFactory(IEnumerable<ITextExtractor> extractors)

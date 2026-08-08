@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using AspireApp.ApiService.Data;
+using AspireApp.ApiService.Ingestion;
 using Microsoft.EntityFrameworkCore;
 
 namespace AspireApp.ApiService.Documents;

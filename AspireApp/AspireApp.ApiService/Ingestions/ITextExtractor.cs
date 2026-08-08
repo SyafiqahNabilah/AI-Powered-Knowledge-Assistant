@@ -1,4 +1,4 @@
- namespace Cortex.Api.Ingestion;
+ namespace AspireApp.ApiService.Ingestion;
 
  // Small abstraction so callers don't need to know *how* text was extracted —
  // same reasoning as coding against an interface rather than a concrete class in Java.

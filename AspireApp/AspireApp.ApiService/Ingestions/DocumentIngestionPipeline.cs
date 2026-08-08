@@ -1,8 +1,9 @@
-using Cortex.Api.Data;
+using AspireApp.ApiService.Data;
+using AspireApp.ApiService.Documents;
 using Microsoft.Extensions.AI;
 using Pgvector;
 
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 public class DocumentIngestionPipeline(
     TextExtractorFactory extractorFactory,
@@ -33,7 +34,7 @@ public class DocumentIngestionPipeline(
             var embeddings = await embeddingGenerator.GenerateAsync([textChunk.Content], cancellationToken: ct);
             var embeddingVector = embeddings.First().Vector.ToArray();
 
-            var chunk = new DocumentChunk
+            var chunk = new DocumentChunck
             {
                 DocumentId = document.Id,
                 Content = textChunk.Content,

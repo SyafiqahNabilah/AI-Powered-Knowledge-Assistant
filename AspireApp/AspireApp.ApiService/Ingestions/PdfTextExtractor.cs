@@ -1,6 +1,6 @@
 using UglyToad.PdfPig; // yes, that's really PdfPig's root namespace
 
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 public class PdfTextExtractor : ITextExtractor
 {

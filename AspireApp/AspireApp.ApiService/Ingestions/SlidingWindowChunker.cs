@@ -1,4 +1,4 @@
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 // Sliding-window chunker: splits text into overlapping word-count windows.
 //

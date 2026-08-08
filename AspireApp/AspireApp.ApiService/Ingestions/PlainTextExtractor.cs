@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 // Handles .md and .txt — no real "extraction" needed, just UTF-8 decoding.
 // We deliberately don't strip Markdown syntax; the LLM handles Markdown fine,

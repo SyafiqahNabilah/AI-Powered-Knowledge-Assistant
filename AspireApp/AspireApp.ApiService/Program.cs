@@ -1,7 +1,10 @@
-using AspireApp.ApiService.Data;
-using Microsoft.EntityFrameworkCore;
-using AspireApp.ApiService.Documents;
 using Microsoft.Extensions.AI;
+using Microsoft.EntityFrameworkCore;
+using AspireApp.ApiService.Data;
+using AspireApp.ApiService.Documents;
+using AspireApp.ApiService.Ingestion;
+using System.Text.Json.Serialization;
+
 using OllamaSharp;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +42,11 @@ builder.Services.AddSingleton<ITextChunker, SlidingWindowChunker>();
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
     new OllamaApiClient(new Uri(ollamaBaseUrl), embeddingModel));
 builder.Services.AddScoped<DocumentIngestionPipeline>();
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+});
 
 var app = builder.Build();
 //migration execution

@@ -1,4 +1,4 @@
-namespace Cortex.Api.Ingestion;
+namespace AspireApp.ApiService.Ingestion;
 
 public interface ITextChunker
 {
