@@ -19,6 +19,13 @@ builder.AddNpgsqlDbContext<ApplicationDbContext>("cortexdb", configureDbContextO
     options.UseNpgsql(o => o.UseVector()); // teaches Npgsql about pgvector's wire format
 });
 
+// Both extractors register against the same interface. Injecting IEnumerable<ITextExtractor>
+// (which TextExtractorFactory does via its primary constructor) resolves *every* registered
+// implementation — the direct equivalent of Spring auto-wiring List<TextExtractor> against
+// every bean implementing that interface.
+builder.Services.AddSingleton<ITextExtractor, PdfTextExtractor>();
+builder.Services.AddSingleton<ITextExtractor, PlainTextExtractor>();
+builder.Services.AddSingleton<TextExtractorFactory>();
 
 var app = builder.Build();
 //migration execution
