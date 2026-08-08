@@ -16,44 +16,53 @@ public static class DocumentsEndpoints
 
     // IFormFile = ASP.NET Core's MultipartFile equivalent. The runtime handles the
     // multipart/form-data parsing for us; we just declare the parameter type.
-    private static async Task<IResult> UploadDocument(
-        IFormFile file,
-        ApplicationDbContext db,
-        CancellationToken ct)
-    {
-        if (file.Length == 0)
-            return Results.BadRequest("File is empty.");
+   private static async Task<IResult> UploadDocument(
+       IFormFile file,
+       ApplicationDbContext db,
+       DocumentIngestionPipeline pipeline,   // newly injected
+       CancellationToken ct)
+   {
+       if (file.Length == 0)
+           return Results.BadRequest("File is empty.");
 
-        // Read the whole file into memory. Fine at portfolio scale (PDFs/notes);
-        // a production system handling large files would stream instead of
-        // buffering the whole thing.
-        using var memoryStream = new MemoryStream();
-        await file.CopyToAsync(memoryStream, ct);
-        var fileBytes = memoryStream.ToArray();
+       using var memoryStream = new MemoryStream();
+       await file.CopyToAsync(memoryStream, ct);
+       var fileBytes = memoryStream.ToArray();
 
-        // Content hashing gives us idempotent ingestion for free: re-uploading the
-        // exact same bytes returns the existing Document instead of reprocessing
-        // and creating duplicate chunks. This is the "idempotent ingestion" senior
-        // note from the roadmap, implemented here rather than bolted on later.
-        var contentHash = Convert.ToHexString(SHA256.HashData(fileBytes));
+       var contentHash = Convert.ToHexString(SHA256.HashData(fileBytes));
 
-        var existing = await db.Documents
-            .FirstOrDefaultAsync(d => d.ContentHash == contentHash, ct);
+       var existing = await db.Documents.FirstOrDefaultAsync(d => d.ContentHash == contentHash, ct);
+       if (existing is not null)
+           return Results.Ok(new { existing.Id, Message = "Document already ingested." });
 
-        if (existing is not null)
-            return Results.Ok(new { existing.Id, Message = "Document already ingested." });
+       var document = new Document
+       {
+           FileName = file.FileName,
+           ContentHash = contentHash,
+       };
 
-        var document = new Document
-        {
-            FileName = file.FileName,
-            ContentHash = contentHash,
-        };
+       db.Documents.Add(document);
+       await db.SaveChangesAsync(ct);
 
-        db.Documents.Add(document);
-        await db.SaveChangesAsync(ct); // save now so document.Id is valid before we touch chunks
+       try
+       {
+           // Synchronous within the request for now — the caller waits until every
+           // chunk is embedded before getting a response. Fine at portfolio scale;
+           // a production system would return immediately and process in a background
+           // job (IHostedService or a message queue), then let the client poll or get
+           // notified when ingestion finishes.
+           await pipeline.IngestAsync(document, fileBytes, ct);
+       }
+       catch (NotSupportedException ex)
+       {
+           // We already saved the Document row before extraction could fail. Roll it
+           // back so a retry with a supported file type doesn't collide with the
+           // ContentHash uniqueness check above.
+           db.Documents.Remove(document);
+           await db.SaveChangesAsync(ct);
+           return Results.BadRequest(ex.Message);
+       }
 
-        // Extraction/chunking/embedding gets wired in here in step 3.5, once those
-        // pieces exist. For now this just proves upload -> DB round trip works.
-        return Results.Created($"/documents/{document.Id}", document);
-    }
+       return Results.Created($"/documents/{document.Id}", document);
+   }
 }

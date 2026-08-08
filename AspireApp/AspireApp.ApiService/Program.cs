@@ -38,7 +38,7 @@ builder.Services.AddSingleton<ITextChunker, SlidingWindowChunker>();
 // later (e.g. to Azure OpenAI for production) means changing this one registration.
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
     new OllamaApiClient(new Uri(ollamaBaseUrl), embeddingModel));
-
+builder.Services.AddScoped<DocumentIngestionPipeline>();
 
 var app = builder.Build();
 //migration execution
