@@ -1,8 +1,12 @@
 using AspireApp.ApiService.Data;
 using Microsoft.EntityFrameworkCore;
 using AspireApp.ApiService.Documents;
+using Microsoft.Extensions.AI;
+using OllamaSharp;
 
 var builder = WebApplication.CreateBuilder(args);
+var ollamaBaseUrl = builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
+var embeddingModel = builder.Configuration["Ollama:EmbeddingModel"] ?? "nomic-embed-text";
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
@@ -27,6 +31,15 @@ builder.Services.AddSingleton<ITextExtractor, PdfTextExtractor>();
 builder.Services.AddSingleton<ITextExtractor, PlainTextExtractor>();
 builder.Services.AddSingleton<TextExtractorFactory>();
 builder.Services.AddSingleton<ITextChunker, SlidingWindowChunker>();
+
+// OllamaApiClient is the provider adapter that plugs Ollama into Microsoft.Extensions.AI's
+// abstractions. This is the ONLY place in the app that knows Ollama exists — everything
+// else depends on IEmbeddingGenerator<string, Embedding<float>>, so swapping providers
+// later (e.g. to Azure OpenAI for production) means changing this one registration.
+builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
+    new OllamaApiClient(new Uri(ollamaBaseUrl), embeddingModel));
+
+
 var app = builder.Build();
 //migration execution
 using (var scope = app.Services.CreateScope())
